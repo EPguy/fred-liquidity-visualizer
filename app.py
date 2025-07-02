@@ -71,15 +71,48 @@ indicator_weights = {
 
 
 # 📐 유동성 점수 계산 함수 (가중치 적용)
-def calculate_liquidity_score(df):
+def calculate_liquidity_score(df, target_year=None, target_month=None):
     score_dict = {}
     scaler = MinMaxScaler()
 
     for series_name in df["Series"].unique():
         df_sub = df[df["Series"] == series_name].sort_values("Date")
+
+        if target_year:
+            if target_month:
+                # 특정 연도-월의 마지막 데이터 찾기
+                df_period = df_sub[
+                    (df_sub["Date"].dt.year == target_year)
+                    & (df_sub["Date"].dt.month == target_month)
+                ]
+                if df_period.empty:
+                    # 해당 월에 데이터가 없으면 해당 연도 해당 월 이전까지의 마지막 데이터
+                    df_period = df_sub[
+                        (df_sub["Date"].dt.year == target_year)
+                        & (df_sub["Date"].dt.month <= target_month)
+                    ]
+                    if df_period.empty:
+                        continue
+            else:
+                # 특정 연도의 마지막 데이터 찾기
+                df_period = df_sub[df_sub["Date"].dt.year == target_year]
+                if df_period.empty:
+                    continue
+
+            target_date = df_period["Date"].max()
+            target_idx = df_sub[df_sub["Date"] == target_date].index[0]
+            target_position = df_sub.index.get_loc(target_idx)
+
         values = df_sub["Value"].values.reshape(-1, 1)
         scaled = scaler.fit_transform(values)
-        latest = scaled[-1][0]
+
+        if target_year:
+            if target_position < len(scaled):
+                latest = scaled[target_position][0]
+            else:
+                continue
+        else:
+            latest = scaled[-1][0]
 
         # 역방향 지표 (값이 낮을수록 유동성이 많은 것)
         if series_name in [
@@ -102,8 +135,31 @@ def calculate_liquidity_score(df):
     return round(weighted_score * 100, 1)
 
 
-# ✅ 유동성 점수 계산
+# ✅ 현재 유동성 점수 계산
 liquidity_score = calculate_liquidity_score(all_data)
+
+# 📅 사용 가능한 연도 및 월 목록 생성
+available_years = sorted(all_data["Date"].dt.year.unique(), reverse=True)
+current_year = all_data["Date"].dt.year.max()
+current_month = all_data[all_data["Date"].dt.year == current_year][
+    "Date"
+].dt.month.max()
+
+# 월 목록 생성 (1월~12월)
+months = [
+    {"label": "1월", "value": 1},
+    {"label": "2월", "value": 2},
+    {"label": "3월", "value": 3},
+    {"label": "4월", "value": 4},
+    {"label": "5월", "value": 5},
+    {"label": "6월", "value": 6},
+    {"label": "7월", "value": 7},
+    {"label": "8월", "value": 8},
+    {"label": "9월", "value": 9},
+    {"label": "10월", "value": 10},
+    {"label": "11월", "value": 11},
+    {"label": "12월", "value": 12},
+]
 
 
 # 해석 메시지
@@ -125,12 +181,69 @@ app.title = "Liquidity Dashboard"
 app.layout = html.Div(
     [
         html.H1("📊 US Liquidity Composite Dashboard", style={"textAlign": "center"}),
+        # 연도 및 월 선택 드롭다운
+        html.Div(
+            [
+                html.Label(
+                    "📅 기간 선택:",
+                    style={
+                        "fontSize": "18px",
+                        "fontWeight": "bold",
+                        "marginBottom": "10px",
+                    },
+                ),
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.Label(
+                                    "연도:",
+                                    style={"fontSize": "14px", "marginBottom": "5px"},
+                                ),
+                                dcc.Dropdown(
+                                    id="year-dropdown",
+                                    options=[
+                                        {"label": f"{year}년", "value": year}
+                                        for year in available_years
+                                    ],
+                                    value=current_year,
+                                    style={"width": "150px"},
+                                ),
+                            ],
+                            style={"display": "inline-block", "marginRight": "20px"},
+                        ),
+                        html.Div(
+                            [
+                                html.Label(
+                                    "월:",
+                                    style={"fontSize": "14px", "marginBottom": "5px"},
+                                ),
+                                dcc.Dropdown(
+                                    id="month-dropdown",
+                                    options=months,
+                                    value=current_month,
+                                    style={"width": "120px"},
+                                ),
+                            ],
+                            style={"display": "inline-block"},
+                        ),
+                    ],
+                    style={
+                        "display": "flex",
+                        "justifyContent": "center",
+                        "alignItems": "flex-end",
+                    },
+                ),
+            ],
+            style={"textAlign": "center", "marginBottom": "20px"},
+        ),
+        # 동적 점수 표시
         html.H2(
-            f"💧 현재 유동성 점수: {liquidity_score} / 100",
+            id="liquidity-score-display",
             style={"textAlign": "center", "color": "#1a73e8"},
         ),
         html.P(
-            get_score_message(liquidity_score),
+            id="score-message",
             style={"textAlign": "center", "fontSize": "18px"},
         ),
         # 가중치 정보 섹션
@@ -176,19 +289,96 @@ app.layout = html.Div(
 )
 
 
-# 🔁 콜백 함수
+# 🔁 콜백 함수 - 유동성 점수 업데이트
+@app.callback(
+    [
+        Output("liquidity-score-display", "children"),
+        Output("score-message", "children"),
+    ],
+    [Input("year-dropdown", "value"), Input("month-dropdown", "value")],
+)
+def update_liquidity_score(selected_year, selected_month):
+    score = calculate_liquidity_score(all_data, selected_year, selected_month)
+    score_text = f"💧 {selected_year}년 {selected_month}월 유동성 점수: {score} / 100"
+    message = get_score_message(score)
+    return score_text, message
+
+
+# 🔁 콜백 함수 - 그래프 업데이트
 @app.callback(
     [Output("indicator-graph", "figure"), Output("description-text", "children")],
-    [Input("indicator-dropdown", "value")],
+    [
+        Input("indicator-dropdown", "value"),
+        Input("year-dropdown", "value"),
+        Input("month-dropdown", "value"),
+    ],
 )
-def update_graph(selected_indicator):
+def update_graph(selected_indicator, selected_year, selected_month):
     df = all_data[all_data["Series"] == selected_indicator]
+
+    # 선택된 연도-월까지의 데이터만 표시
+    if selected_year and selected_month:
+        df = df[
+            (df["Date"].dt.year < selected_year)
+            | (
+                (df["Date"].dt.year == selected_year)
+                & (df["Date"].dt.month <= selected_month)
+            )
+        ]
+    elif selected_year:
+        df = df[df["Date"].dt.year <= selected_year]
+
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(x=df["Date"], y=df["Value"], mode="lines", name=selected_indicator)
     )
+
+    # 선택된 연도-월의 마지막 데이터 포인트 강조
+    if selected_year and selected_month and not df.empty:
+        period_data = df[
+            (df["Date"].dt.year == selected_year)
+            & (df["Date"].dt.month == selected_month)
+        ]
+        if period_data.empty:
+            # 해당 월에 데이터가 없으면 해당 연도 해당 월 이전의 마지막 데이터
+            period_data = df[
+                (df["Date"].dt.year == selected_year)
+                & (df["Date"].dt.month <= selected_month)
+            ]
+
+        if not period_data.empty:
+            latest_point = period_data.iloc[-1]
+            fig.add_trace(
+                go.Scatter(
+                    x=[latest_point["Date"]],
+                    y=[latest_point["Value"]],
+                    mode="markers",
+                    marker=dict(size=10, color="red"),
+                    name=f"{selected_year}년 {selected_month}월 값",
+                )
+            )
+    elif selected_year and not df.empty:
+        year_data = df[df["Date"].dt.year == selected_year]
+        if not year_data.empty:
+            latest_point = year_data.iloc[-1]
+            fig.add_trace(
+                go.Scatter(
+                    x=[latest_point["Date"]],
+                    y=[latest_point["Value"]],
+                    mode="markers",
+                    marker=dict(size=10, color="red"),
+                    name=f"{selected_year}년 값",
+                )
+            )
+
+    title_text = f"{selected_indicator}"
+    if selected_year and selected_month:
+        title_text += f" ({selected_year}년 {selected_month}월까지)"
+    elif selected_year:
+        title_text += f" ({selected_year}년까지)"
+
     fig.update_layout(
-        title=selected_indicator,
+        title=title_text,
         xaxis_title="Date",
         yaxis_title="Value",
         height=500,
