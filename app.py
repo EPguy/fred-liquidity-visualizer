@@ -3,6 +3,7 @@
 import os
 
 import dash
+import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
 from dash import Dash, dcc, html
@@ -28,6 +29,8 @@ indicators = {
     "WDTGAL": "TGA (Treasury General Account)",
     "BUSLOANS": "C&I Loans",
     "BAMLH0A0HYM2": "High-Yield Spread",
+    # 시장 지표 (차트 표시용)
+    "NASDAQCOM": "NASDAQ Composite Index",
 }
 
 # 📝 한글 설명 - 개선된 지표들
@@ -484,7 +487,37 @@ def update_graph(selected_indicator, selected_year, selected_month):
 def update_liquidity_score_chart(selected_year, selected_month):
     fig = go.Figure()
 
-    # 전체 히스토리 점수 라인 차트
+    # NASDAQ 데이터 추출 (실제 값 사용)
+    nasdaq_data = all_data[all_data["Series"] == "NASDAQ Composite Index"].sort_values(
+        "Date"
+    )
+
+    if not nasdaq_data.empty:
+        print(f"📊 NASDAQ 데이터 행 수: {len(nasdaq_data)}")
+        print(
+            f"📅 NASDAQ 데이터 기간: {nasdaq_data['Date'].min()} ~ {nasdaq_data['Date'].max()}"
+        )
+        print(
+            f"📈 NASDAQ 지수 범위: {nasdaq_data['Value'].min():.1f} ~ {nasdaq_data['Value'].max():.1f}"
+        )
+
+        # NASDAQ 차트 (보조 y축 사용, 실제 값)
+        fig.add_trace(
+            go.Scatter(
+                x=nasdaq_data["Date"],
+                y=nasdaq_data["Value"],
+                mode="lines",
+                name="NASDAQ 지수",
+                line=dict(color="#ff7f0e", width=1.5, dash="dot"),
+                yaxis="y2",  # 보조 y축 사용
+                opacity=0.7,
+            )
+        )
+    else:
+        print("⚠️ NASDAQ 데이터가 비어있습니다!")
+        print(f"📋 사용 가능한 Series: {sorted(all_data['Series'].unique())}")
+
+    # 유동성 점수 라인 차트 (주 y축)
     fig.add_trace(
         go.Scatter(
             x=liquidity_score_history["Date"],
@@ -492,19 +525,19 @@ def update_liquidity_score_chart(selected_year, selected_month):
             mode="lines",
             name="유동성 점수",
             line=dict(color="#1f77b4", width=2),
+            yaxis="y1",
         )
     )
 
     # 선택된 시점 강조 표시
     if selected_year and selected_month:
-        # 선택된 연도-월에 해당하는 데이터 찾기
+        # 유동성 점수 포인트 강조
         target_data = liquidity_score_history[
             (liquidity_score_history["Date"].dt.year == selected_year)
             & (liquidity_score_history["Date"].dt.month == selected_month)
         ]
 
         if target_data.empty:
-            # 해당 월에 데이터가 없으면 해당 연도 해당 월 이전의 마지막 데이터
             target_data = liquidity_score_history[
                 (liquidity_score_history["Date"].dt.year == selected_year)
                 & (liquidity_score_history["Date"].dt.month <= selected_month)
@@ -519,45 +552,85 @@ def update_liquidity_score_chart(selected_year, selected_month):
                     mode="markers",
                     name=f"{selected_year}년 {selected_month}월 점수",
                     marker=dict(size=12, color="red", symbol="diamond"),
+                    yaxis="y1",
                 )
             )
 
-    # 점수 구간별 색상 구역 표시
+        # NASDAQ 포인트 강조 (실제 값)
+        if not nasdaq_data.empty:
+            nasdaq_target = nasdaq_data[
+                (nasdaq_data["Date"].dt.year == selected_year)
+                & (nasdaq_data["Date"].dt.month == selected_month)
+            ]
+
+            if nasdaq_target.empty:
+                nasdaq_target = nasdaq_data[
+                    (nasdaq_data["Date"].dt.year == selected_year)
+                    & (nasdaq_data["Date"].dt.month <= selected_month)
+                ]
+
+            if not nasdaq_target.empty:
+                nasdaq_point = nasdaq_target.iloc[-1]
+                # 해당 시점의 NASDAQ 실제 값 사용
+                fig.add_trace(
+                    go.Scatter(
+                        x=[nasdaq_point["Date"]],
+                        y=[nasdaq_point["Value"]],
+                        mode="markers",
+                        name=f"{selected_year}년 {selected_month}월 NASDAQ",
+                        marker=dict(size=10, color="orange", symbol="circle"),
+                        yaxis="y2",  # 보조 y축 사용
+                    )
+                )
+
+    # 점수 구간별 색상 구역 표시 (주 y축 기준)
     fig.add_hline(
         y=80,
         line_dash="dash",
         line_color="green",
-        opacity=0.5,
+        opacity=0.3,
         annotation_text="매우 풍부 (80+)",
     )
     fig.add_hline(
         y=60,
         line_dash="dash",
         line_color="orange",
-        opacity=0.5,
+        opacity=0.3,
         annotation_text="충분 (60+)",
     )
     fig.add_hline(
         y=40,
         line_dash="dash",
         line_color="red",
-        opacity=0.5,
+        opacity=0.3,
         annotation_text="주의 (40+)",
     )
 
-    # 배경 색상 구역 추가
-    fig.add_hrect(y0=80, y1=100, fillcolor="green", opacity=0.1, line_width=0)
-    fig.add_hrect(y0=60, y1=80, fillcolor="yellow", opacity=0.1, line_width=0)
-    fig.add_hrect(y0=40, y1=60, fillcolor="orange", opacity=0.1, line_width=0)
-    fig.add_hrect(y0=0, y1=40, fillcolor="red", opacity=0.1, line_width=0)
+    # 배경 색상 구역 추가 (유동성 점수 범위에만 적용)
+    fig.add_hrect(y0=80, y1=100, fillcolor="green", opacity=0.05, line_width=0)
+    fig.add_hrect(y0=60, y1=80, fillcolor="yellow", opacity=0.05, line_width=0)
+    fig.add_hrect(y0=40, y1=60, fillcolor="orange", opacity=0.05, line_width=0)
+    fig.add_hrect(y0=0, y1=40, fillcolor="red", opacity=0.05, line_width=0)
 
     fig.update_layout(
-        title="🌊 시간에 따른 유동성 점수 변화",
+        title="🌊 유동성 점수 vs 📈 NASDAQ 지수 비교 (이중 y축)",
         xaxis_title="날짜",
-        yaxis_title="유동성 점수",
         height=500,
         hovermode="x unified",
-        yaxis=dict(range=[0, 100]),
+        # 왼쪽 y축 (유동성 점수)
+        yaxis=dict(
+            title="유동성 점수 (0-100)",
+            range=[0, 100],
+            side="left",
+            showgrid=True,
+        ),
+        # 오른쪽 y축 (NASDAQ 지수)
+        yaxis2=dict(
+            title="NASDAQ 지수",
+            side="right",
+            overlaying="y",
+            showgrid=False,
+        ),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
 
