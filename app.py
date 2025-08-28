@@ -23,6 +23,7 @@ indicators = {
     "M2SL": "M2 Money Supply",
     "FEDFUNDS": "Federal Funds Rate",
     "BOGZ1FL193020005Q": "Bank Reserves",  # 은행 준비금 - 핵심 유동성 지표
+    "WALCL": "Fed Balance Sheet",  # 연준 대차대조표 - QE/QT 핵심 지표
     "DGS3MO": "3-Month Treasury Rate",  # 3개월 국채금리 - 단기 유동성 반영
     "DEXUSEU": "Dollar Index (EUR/USD)",  # 달러 강세 - 글로벌 유동성 영향
     # 참고용 지표들 (점수 계산에는 미포함)
@@ -39,6 +40,7 @@ indicator_descriptions = {
     "M2 Money Supply": "M2는 광의 통화량으로, 현금, 요구불 예금, 저축성 예금 등을 포함합니다.",
     "Federal Funds Rate": "연방기금금리는 미국 은행 간 초단기 금리로, 연준의 통화 정책 방향을 반영합니다.",
     "Bank Reserves": "은행 준비금은 은행들이 연준에 보유한 초과 자금으로, 시장 유동성의 직접적인 지표입니다. 📈 높을수록: 은행들이 여유 자금이 많아 유동성 풍부, 📉 낮을수록: 은행 시스템 내 유동성 부족을 의미합니다.",
+    "Fed Balance Sheet": "연준 대차대조표는 연준이 보유한 총자산 규모로, QE(양적완화) 시 증가하고 QT(양적긴축) 시 감소합니다. 📈 높을수록: 연준이 시장에 유동성을 대량 공급하는 상태, 📉 낮을수록: 연준이 유동성을 회수하는 긴축 정책을 의미합니다.",
     "3-Month Treasury Rate": "3개월 국채금리는 단기 유동성 상황을 잘 반영하며, 연준 정책과 시장 기대를 나타냅니다. 📈 높을수록: 단기 자금 조달 비용 상승으로 유동성 긴축, 📉 낮을수록: 단기 유동성 풍부를 의미합니다.",
     "Dollar Index (EUR/USD)": "달러 대비 유로 환율로, 달러 강세는 글로벌 유동성 긴축 효과를 가져옵니다. 📈 높을수록: 달러 약세로 글로벌 유동성 완화, 📉 낮을수록: 달러 강세로 글로벌 유동성 긴축 효과를 의미합니다.",
     # 참고용 지표들 (점수 계산에는 미포함)
@@ -67,11 +69,12 @@ print(f"✅ 총 {len(all_data)} 개의 데이터 포인트 로딩 완료!")
 
 # ⚖️ 지표별 가중치 설정 - 개선된 배분
 indicator_weights = {
-    "Reverse Repo (RRP)": 0.30,  # 최고 가중치 - 연준의 직접적 유동성 흡수 도구
-    "Bank Reserves": 0.25,  # 높은 가중치 - 은행 시스템 유동성의 핵심 지표
-    "M2 Money Supply": 0.20,  # 높은 가중치 - 전체 통화량 기반
-    "Federal Funds Rate": 0.15,  # 중간 가중치 - 정책금리 (다른 지표들이 이미 반영)
-    "3-Month Treasury Rate": 0.07,  # 낮은 가중치 - 단기 유동성 보완 지표
+    "Reverse Repo (RRP)": 0.25,  # 높은 가중치 - 연준의 직접적 유동성 흡수 도구
+    "Fed Balance Sheet": 0.20,  # 높은 가중치 - QE/QT의 핵심 지표
+    "Bank Reserves": 0.20,  # 높은 가중치 - 은행 시스템 유동성의 핵심 지표
+    "M2 Money Supply": 0.15,  # 중간 가중치 - 전체 통화량 기반
+    "Federal Funds Rate": 0.12,  # 중간 가중치 - 정책금리 (다른 지표들이 이미 반영)
+    "3-Month Treasury Rate": 0.05,  # 낮은 가중치 - 단기 유동성 보완 지표
     "Dollar Index (EUR/USD)": 0.03,  # 최소 가중치 - 글로벌 유동성 영향 (보조 지표)
 }
 
@@ -145,7 +148,7 @@ def calculate_liquidity_score(df, target_year=None, target_month=None):
 liquidity_score = calculate_liquidity_score(all_data)
 
 
-# 📊 전체 기간 유동성 점수 히스토리 계산
+# �� 전체 기간 유동성 점수 히스토리 계산
 def calculate_liquidity_score_history(df):
     """전체 기간에 대한 유동성 점수 히스토리를 계산 (월별 샘플링으로 최적화)"""
     score_history = []
