@@ -26,6 +26,9 @@ indicators = {
     "WALCL": "Fed Balance Sheet",  # 연준 대차대조표 - QE/QT 핵심 지표
     "DGS3MO": "3-Month Treasury Rate",  # 3개월 국채금리 - 단기 유동성 반영
     "DEXUSEU": "Dollar Index (EUR/USD)",  # 달러 강세 - 글로벌 유동성 영향
+    # MMF 지표들 - 머니마켓펀드 유동성 지표
+    "MMMFFAQ027S": "MMF Total Assets",  # 머니마켓펀드 총자산 - 기관 유동성 지표
+    "WRMFNS": "Retail MMF Assets",  # 소매 머니마켓펀드 - 개인 유동성 지표
     # 참고용 지표들 (점수 계산에는 미포함)
     "WDTGAL": "TGA (Treasury General Account)",
     "BUSLOANS": "C&I Loans",
@@ -43,6 +46,9 @@ indicator_descriptions = {
     "Fed Balance Sheet": "연준 대차대조표는 연준이 보유한 총자산 규모로, QE(양적완화) 시 증가하고 QT(양적긴축) 시 감소합니다. 📈 높을수록: 연준이 시장에 유동성을 대량 공급하는 상태, 📉 낮을수록: 연준이 유동성을 회수하는 긴축 정책을 의미합니다.",
     "3-Month Treasury Rate": "3개월 국채금리는 단기 유동성 상황을 잘 반영하며, 연준 정책과 시장 기대를 나타냅니다. 📈 높을수록: 단기 자금 조달 비용 상승으로 유동성 긴축, 📉 낮을수록: 단기 유동성 풍부를 의미합니다.",
     "Dollar Index (EUR/USD)": "달러 대비 유로 환율로, 달러 강세는 글로벌 유동성 긴축 효과를 가져옵니다. 📈 높을수록: 달러 약세로 글로벌 유동성 완화, 📉 낮을수록: 달러 강세로 글로벌 유동성 긴축 효과를 의미합니다.",
+    # MMF 지표들
+    "MMF Total Assets": "머니마켓펀드 총자산은 금융기관과 기업들이 단기 유동성 관리를 위해 보유한 자금 규모입니다. 📈 높을수록: 단기 자금 운용 수요 증가로 유동성 풍부, 📉 낮을수록: 단기 자금 회수로 유동성 긴축을 의미합니다.",
+    "Retail MMF Assets": "소매 머니마켓펀드는 개인 투자자들이 보유한 단기 유동성 자산입니다. 📈 높을수록: 개인의 현금성 자산 증가로 소비 여력 확대, 📉 낮을수록: 개인 유동성 감소로 소비 위축 가능성을 의미합니다.",
     # 참고용 지표들 (점수 계산에는 미포함)
     "TGA (Treasury General Account)": "재무부 일반 계정은 미 재무부가 연준에 보유한 예산 잔액을 나타냅니다. 📈 높을수록: 정부 자금이 연준에 보관되어 유동성 흡수, 📉 낮을수록: 정부 지출로 시장에 유동성 공급을 의미합니다.",
     "C&I Loans": "기업 대출(C&I Loans)은 은행이 기업에 빌려준 자금으로, 기업의 신용 수요와 경기 활력을 보여줍니다. 📈 높을수록: 기업 대출 수요 증가로 경기 활성화, 📉 낮을수록: 신용 수요 감소로 경기 둔화를 의미합니다.",
@@ -67,15 +73,17 @@ all_data.dropna(inplace=True)
 print(f"✅ 총 {len(all_data)} 개의 데이터 포인트 로딩 완료!")
 
 
-# ⚖️ 지표별 가중치 설정 - 개선된 배분
+# ⚖️ 지표별 가중치 설정 - 개선된 배분 (MMF 지표 포함)
 indicator_weights = {
-    "Reverse Repo (RRP)": 0.25,  # 높은 가중치 - 연준의 직접적 유동성 흡수 도구
-    "Fed Balance Sheet": 0.20,  # 높은 가중치 - QE/QT의 핵심 지표
-    "Bank Reserves": 0.20,  # 높은 가중치 - 은행 시스템 유동성의 핵심 지표
-    "M2 Money Supply": 0.15,  # 중간 가중치 - 전체 통화량 기반
-    "Federal Funds Rate": 0.12,  # 중간 가중치 - 정책금리 (다른 지표들이 이미 반영)
-    "3-Month Treasury Rate": 0.05,  # 낮은 가중치 - 단기 유동성 보완 지표
-    "Dollar Index (EUR/USD)": 0.03,  # 최소 가중치 - 글로벌 유동성 영향 (보조 지표)
+    "Reverse Repo (RRP)": 0.22,  # 높은 가중치 - 연준의 직접적 유동성 흡수 도구
+    "Fed Balance Sheet": 0.18,  # 높은 가중치 - QE/QT의 핵심 지표
+    "Bank Reserves": 0.18,  # 높은 가중치 - 은행 시스템 유동성의 핵심 지표
+    "MMF Total Assets": 0.12,  # 중간 가중치 - 기관 유동성 지표
+    "M2 Money Supply": 0.12,  # 중간 가중치 - 전체 통화량 기반
+    "Federal Funds Rate": 0.10,  # 중간 가중치 - 정책금리 (다른 지표들이 이미 반영)
+    "Retail MMF Assets": 0.05,  # 낮은 가중치 - 개인 유동성 지표
+    "3-Month Treasury Rate": 0.02,  # 낮은 가중치 - 단기 유동성 보완 지표
+    "Dollar Index (EUR/USD)": 0.01,  # 최소 가중치 - 글로벌 유동성 영향 (보조 지표)
 }
 
 
